@@ -109,15 +109,6 @@ while ($rate = $rates_result->fetch_assoc()) {
     $rates[$rate['vehicle_type']] = $rate;
 }
 
-// Remove this duplicate query
-// Get parking areas
-// $query = "SELECT * FROM parking_areas";
-// $result = $conn->query($query);
-// $parking_areas = [];
-// while ($row = $result->fetch_assoc()) {
-//     $parking_areas[] = $row;
-// }
-
 // Format rates for JavaScript
 $formatted_rates = [];
 foreach ($rates as $type => $rate) {
@@ -166,94 +157,28 @@ include '../includes/navbar.php';
                 <div class="card-body">
                     <form method="post" action="entry.php" id="entryForm">
                         <div class="mb-3">
-                            <label class="form-label">Choose Vehicle</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="vehicle_choice" id="existingVehicle" value="existing" <?php echo (count($vehicles) > 0) ? 'checked' : ''; ?>>
-                                <label class="form-check-label" for="existingVehicle">
-                                    Use existing vehicle
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="vehicle_choice" id="newVehicle" value="new" <?php echo (count($vehicles) == 0) ? 'checked' : ''; ?>>
-                                <label class="form-check-label" for="newVehicle">
-                                    Register a new vehicle
-                                </label>
-                            </div>
+                            <label for="vehicle_id" class="form-label">Select Your Vehicle</label>
+                            <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+                                <option value="" disabled selected>Select a vehicle</option>
+                                <?php foreach ($vehicles as $vehicle): ?>
+                                    <option value="<?php echo $vehicle['vehicle_id']; ?>" data-type="<?php echo $vehicle['vehicle_type']; ?>">
+                                        <?php echo $vehicle['vehicle_number']; ?> (<?php echo ucfirst($vehicle['vehicle_type']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
-
-                        <!-- Existing Vehicle Selection -->
-                        <div id="existingVehicleSection" style="display: <?php echo (count($vehicles) > 0) ? 'block' : 'none'; ?>;">
-                            <div class="mb-3">
-                                <label for="vehicle_id" class="form-label">Select Your Vehicle</label>
-                                <select class="form-select" id="vehicle_id" name="vehicle_id" required>
-                                    <option value="" disabled selected>Select a vehicle</option>
-                                    <?php foreach ($vehicles as $vehicle): ?>
-                                        <option value="<?php echo $vehicle['vehicle_id']; ?>" data-type="<?php echo $vehicle['vehicle_type']; ?>">
-                                            <?php echo $vehicle['vehicle_number']; ?> (<?php echo ucfirst($vehicle['vehicle_type']); ?>)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- New Vehicle Registration -->
-                        <div id="newVehicleSection" style="display: <?php echo (count($vehicles) == 0) ? 'block' : 'none'; ?>;">
-                            <div class="mb-3">
-                                <label for="vehicle_type" class="form-label">Vehicle Type</label>
-                                <select class="form-select" id="vehicle_type" name="vehicle_type" required>
-                                    <option value="" disabled selected>Select vehicle type</option>
-                                    <option value="2-wheeler">2-Wheeler</option>
-                                    <option value="4-wheeler">4-Wheeler</option>
-                                    <option value="commercial">Commercial</option>
-                                </select>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="vehicle_number" class="form-label">Vehicle Number</label>
-                                <input type="text" class="form-control" id="vehicle_number" name="vehicle_number" placeholder="e.g., MH01AB1234" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="vehicle_make" class="form-label">Make</label>
-                                <input type="text" class="form-control" id="vehicle_make" name="vehicle_make" placeholder="e.g., Honda, Toyota">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="vehicle_model" class="form-label">Model</label>
-                                <input type="text" class="form-control" id="vehicle_model" name="vehicle_model" placeholder="e.g., Civic, Corolla">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="vehicle_color" class="form-label">Color</label>
-                                <input type="text" class="form-control" id="vehicle_color" name="vehicle_color" placeholder="e.g., Red, Blue">
-                            </div>
-                        </div>
-
                         <div class="mb-3">
                             <label for="area_id" class="form-label">Parking Area</label>
                             <select class="form-select" id="area_id" name="area_id" required>
                                 <option value="" disabled selected>Select parking area</option>
                                 <?php foreach ($parking_areas as $area): ?>
-                                    <?php
-                                    // Calculate available slots based on vehicle type
-                                    $available_2wheeler = $area['total_2_wheeler_slots'] - $area['occupied_2_wheeler_slots'];
-                                    $available_4wheeler = $area['total_4_wheeler_slots'] - $area['occupied_4_wheeler_slots'];
-                                    $available_commercial = $area['total_commercial_slots'] - $area['occupied_commercial_slots'];
-                                    ?>
-                                    <option value="<?php echo $area['area_id']; ?>" 
-                                            data-2wheeler="<?php echo $available_2wheeler; ?>"
-                                            data-4wheeler="<?php echo $available_4wheeler; ?>"
-                                            data-commercial="<?php echo $available_commercial; ?>">
-                                        <?php echo $area['area_name']; ?> 
+                                    <option value="<?php echo $area['area_id']; ?>">
+                                        <?php echo $area['area_name']; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-
-                        <div class="mb-3">
-                            <button type="submit" class="btn btn-primary" id="submitBtn">Park Vehicle</button>
-                            <a href="../index.php" class="btn btn-secondary">Cancel</a>
-                        </div>
+                        <button type="submit" class="btn btn-primary">Park Vehicle</button>
                     </form>
                 </div>
             </div>

@@ -1,13 +1,11 @@
 // Wait for DOM to be loaded
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize all interactive elements
-    initializeApp();
-
+document.addEventListener('DOMContentLoaded', function () {
     const existingVehicleRadio = document.getElementById('existingVehicle');
     const vehicleIdSelect = document.getElementById('vehicle_id');
+    const areaSelect = document.getElementById('area_id');
     const entryForm = document.getElementById('entryForm');
 
-    entryForm.addEventListener('submit', function(e) {
+    entryForm.addEventListener('submit', function (e) {
         let isValid = true;
         let errorMessage = '';
 
@@ -17,6 +15,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 errorMessage = 'Please select a vehicle';
                 isValid = false;
             }
+        }
+
+        // Validate parking area selection
+        if (!areaSelect || !areaSelect.value) {
+            errorMessage = 'Please select a parking area';
+            isValid = false;
         }
 
         // If validation fails, prevent form submission
