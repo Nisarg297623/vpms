@@ -2,6 +2,29 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize all interactive elements
     initializeApp();
+
+    const existingVehicleRadio = document.getElementById('existingVehicle');
+    const vehicleIdSelect = document.getElementById('vehicle_id');
+    const entryForm = document.getElementById('entryForm');
+
+    entryForm.addEventListener('submit', function(e) {
+        let isValid = true;
+        let errorMessage = '';
+
+        // Validate vehicle selection
+        if (existingVehicleRadio.checked) {
+            if (!vehicleIdSelect || !vehicleIdSelect.value) {
+                errorMessage = 'Please select a vehicle';
+                isValid = false;
+            }
+        }
+
+        // If validation fails, prevent form submission
+        if (!isValid) {
+            e.preventDefault();
+            alert(errorMessage);
+        }
+    });
 });
 
 // Main initialization function
@@ -423,6 +446,8 @@ function renderTransactionHistoryChart() {
                 }
             }
         });
+    } else {
+        console.error('Chart.js is not loaded. Please include the Chart.js library.');
     }
 }
 

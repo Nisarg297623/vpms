@@ -24,101 +24,54 @@ if (!$result->fetch_assoc()) {
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $vehicle_id = null;
-        $vehicle_type = null;
-
-        // Start transaction
-        if ($conn->begin_transaction()) {
-            
-            if ($_POST['vehicle_choice'] === 'existing') {
-                if (!isset($_POST['vehicle_id']) || empty($_POST['vehicle_id'])) {
-                    throw new Exception("No vehicle selected");
-                }
-                $vehicle_id = $_POST['vehicle_id'];
-
-                // Get vehicle type
-                $stmt = $conn->prepare("SELECT vehicle_type FROM vehicles WHERE vehicle_id = ? AND user_id = ?");
-                $stmt->bind_param("si", $vehicle_id, $user_id);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                $vehicle = $result->fetch_assoc();
-                if (!$vehicle) {
-                    throw new Exception("Invalid vehicle selected");
-                }
-                $vehicle_type = $vehicle['vehicle_type'];
-            } else {
-                // Register new vehicle
-                if (!isset($_POST['vehicle_type'], $_POST['vehicle_number'])) {
-                    throw new Exception("Missing required vehicle information");
-                }
-
-                $vehicle_type = sanitize_input($conn, $_POST['vehicle_type']);
-                $vehicle_number = sanitize_input($conn, $_POST['vehicle_number']);
-                $vehicle_make = sanitize_input($conn, $_POST['vehicle_make'] ?? '');
-                $vehicle_model = sanitize_input($conn, $_POST['vehicle_model'] ?? '');
-                $vehicle_color = sanitize_input($conn, $_POST['vehicle_color'] ?? '');
-
-                // Check if vehicle number already exists
-                $check_stmt = $conn->prepare("SELECT vehicle_id FROM vehicles WHERE vehicle_number = ?");
-                $check_stmt->bind_param("s", $vehicle_number);
-                $check_stmt->execute();
-                $result = $check_stmt->get_result();
-                if ($result->fetch_assoc()) {
-                    throw new Exception("Vehicle with this number already exists");
-                }
-
-                $vehicle_id = generateVehicleID($conn);
-                $stmt = $conn->prepare("INSERT INTO vehicles (vehicle_id, user_id, vehicle_type, vehicle_number, vehicle_make, vehicle_model, vehicle_color) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sisssss", $vehicle_id, $user_id, $vehicle_type, $vehicle_number, $vehicle_make, $vehicle_model, $vehicle_color);
-                if (!$stmt->execute()) {
-                    throw new Exception("Failed to register vehicle");
-                }
+        if ($_POST['vehicle_choice'] === 'existing') {
+            if (!isset($_POST['vehicle_id']) || empty($_POST['vehicle_id'])) {
+                throw new Exception("No vehicle selected");
             }
 
-            // Create parking transaction
-            $area_id = $_POST['area_id'];
-            $transaction_id = uniqid('TRX');
+            $vehicle_id = $_POST['vehicle_id'];
 
+            // Fetch vehicle type
+            $stmt = $conn->prepare("SELECT vehicle_type FROM vehicles WHERE vehicle_id = ? AND user_id = ?");
+            $stmt->bind_param("si", $vehicle_id, $user_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $vehicle = $result->fetch_assoc();
+
+            if (!$vehicle) {
+                throw new Exception("Invalid vehicle selected");
+            }
+
+            $vehicle_type = $vehicle['vehicle_type'];
+
+            // Proceed with parking transaction
+            $transaction_id = uniqid('TRX');
             $stmt = $conn->prepare("INSERT INTO parking_transactions (transaction_id, vehicle_id, area_id, entry_time, status) VALUES (?, ?, ?, NOW(), 'in')");
-            $stmt->bind_param("ssi", $transaction_id, $vehicle_id, $area_id);
+            $stmt->bind_param("ssi", $transaction_id, $vehicle_id, $_POST['area_id']);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to create parking transaction");
             }
 
             // Update parking area occupancy
-            $column_occupied = "";
-            switch ($vehicle_type) {
-                case '2-wheeler':
-                    $column_occupied = "occupied_2_wheeler_slots";
-                    break;
-                case '4-wheeler':
-                    $column_occupied = "occupied_4_wheeler_slots";
-                    break;
-                case 'commercial':
-                    $column_occupied = "occupied_commercial_slots";
-                    break;
-            }
+            $column_occupied = match ($vehicle_type) {
+                '2-wheeler' => 'occupied_2_wheeler_slots',
+                '4-wheeler' => 'occupied_4_wheeler_slots',
+                'commercial' => 'occupied_commercial_slots',
+            };
 
             $update_query = "UPDATE parking_areas SET $column_occupied = $column_occupied + 1 WHERE area_id = ?";
             $stmt = $conn->prepare($update_query);
-            $stmt->bind_param("i", $area_id);
+            $stmt->bind_param("i", $_POST['area_id']);
             if (!$stmt->execute()) {
                 throw new Exception("Failed to update parking area occupancy");
             }
 
-            // Commit transaction
             $conn->commit();
             $_SESSION['success_message'] = "Vehicle parked successfully!";
             redirect('view_status.php');
-
-        } else {
-            throw new Exception("Could not start transaction");
         }
-
     } catch (Exception $e) {
-        if ($conn->connect_errno) {
-            $conn->rollback();
-        }
+        $conn->rollback();
         $_SESSION['error_message'] = $e->getMessage();
     }
 }
