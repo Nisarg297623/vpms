@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($conn->begin_transaction()) {
             
             if ($_POST['vehicle_choice'] === 'existing') {
-                if (!isset($_POST['vehicle_id'])) {
+                if (!isset($_POST['vehicle_id']) || empty($_POST['vehicle_id'])) {
                     throw new Exception("No vehicle selected");
                 }
                 $vehicle_id = $_POST['vehicle_id'];
@@ -232,7 +232,8 @@ include '../includes/navbar.php';
                         <div id="existingVehicleSection" style="display: <?php echo (count($vehicles) > 0) ? 'block' : 'none'; ?>;">
                             <div class="mb-3">
                                 <label for="vehicle_id" class="form-label">Select Your Vehicle</label>
-                                <select class="form-select" id="vehicle_id" name="vehicle_id">
+                                <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+                                    <option value="" disabled selected>Select a vehicle</option>
                                     <?php foreach ($vehicles as $vehicle): ?>
                                         <option value="<?php echo $vehicle['vehicle_id']; ?>" data-type="<?php echo $vehicle['vehicle_type']; ?>">
                                             <?php echo $vehicle['vehicle_number']; ?> (<?php echo ucfirst($vehicle['vehicle_type']); ?>)

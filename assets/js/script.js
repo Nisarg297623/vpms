@@ -25,6 +25,9 @@ function initializeApp() {
     
     // Initialize alerts to auto-close
     initializeAlerts();
+    
+    // Initialize entry form validation
+    initializeEntryFormValidation();
 }
 
 // Form validation
@@ -481,5 +484,41 @@ function initializeAlerts() {
         setTimeout(() => {
             alert.style.display = 'none';
         }, 5000);
+    });
+}
+
+// Initialize entry form validation
+function initializeEntryFormValidation() {
+    const existingVehicleRadio = document.getElementById('existingVehicle');
+    const newVehicleRadio = document.getElementById('newVehicle');
+    const vehicleIdSelect = document.getElementById('vehicle_id');
+    const entryForm = document.getElementById('entryForm');
+
+    entryForm.addEventListener('submit', function(e) {
+        let valid = true;
+
+        if (existingVehicleRadio.checked) {
+            if (!vehicleIdSelect || !vehicleIdSelect.value) {
+                alert('Please select a vehicle');
+                valid = false;
+            }
+        } else if (newVehicleRadio.checked) {
+            const vehicleTypeSelect = document.getElementById('vehicle_type');
+            const vehicleNumber = document.getElementById('vehicle_number');
+
+            if (!vehicleTypeSelect || !vehicleTypeSelect.value) {
+                alert('Please select a vehicle type');
+                valid = false;
+            }
+
+            if (!vehicleNumber || !vehicleNumber.value.trim()) {
+                alert('Please enter a vehicle number');
+                valid = false;
+            }
+        }
+
+        if (!valid) {
+            e.preventDefault();
+        }
     });
 }
