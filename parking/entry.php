@@ -123,15 +123,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get user's vehicles
-$query = "SELECT * FROM vehicles WHERE user_id = ?";
+// Get user's vehicles with more details
+$query = "SELECT v.*, 
+          (SELECT COUNT(*) FROM parking_transactions 
+           WHERE vehicle_id = v.vehicle_id AND status = 'in') as is_parked 
+          FROM vehicles v 
+          WHERE v.user_id = ?";
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
 $vehicles = [];
 while ($row = $result->fetch_assoc()) {
-    $vehicles[] = $row;
+    if ($row['is_parked'] == 0) { // Only add vehicles that are not currently parked
+        $vehicles[] = $row;
+    }
 }
 
 // Get available parking areas
@@ -143,12 +149,35 @@ while ($row = $result->fetch_assoc()) {
 }
 
 // Get parking rates
-$query = "SELECT * FROM parking_rates";
-$result = $conn->query($query);
+$rates_query = "SELECT * FROM parking_rates";
+$rates_result = $conn->query($rates_query);
 $rates = [];
-while ($row = $result->fetch_assoc()) {
-    $rates[$row['vehicle_type']] = $row;
+while ($rate = $rates_result->fetch_assoc()) {
+    $rates[$rate['vehicle_type']] = $rate;
 }
+
+// Remove this duplicate query
+// Get parking areas
+// $query = "SELECT * FROM parking_areas";
+// $result = $conn->query($query);
+// $parking_areas = [];
+// while ($row = $result->fetch_assoc()) {
+//     $parking_areas[] = $row;
+// }
+
+// Format rates for JavaScript
+$formatted_rates = [];
+foreach ($rates as $type => $rate) {
+    $formatted_rates[$type] = [
+        'hourly' => floatval($rate['hourly_rate']),
+        'daily' => floatval($rate['daily_rate']),
+        'weekly' => floatval($rate['weekly_rate']),
+        'monthly' => floatval($rate['monthly_rate'])
+    ];
+}
+
+// Add this before the HTML form
+echo "<script>const parkingRates = " . json_encode($formatted_rates) . ";</script>";
 
 include '../includes/header.php';
 include '../includes/navbar.php';
@@ -251,10 +280,16 @@ include '../includes/navbar.php';
                             <select class="form-select" id="area_id" name="area_id" required>
                                 <option value="" disabled selected>Select parking area</option>
                                 <?php foreach ($parking_areas as $area): ?>
+                                    <?php
+                                    // Calculate available slots based on vehicle type
+                                    $available_2wheeler = $area['total_2_wheeler_slots'] - $area['occupied_2_wheeler_slots'];
+                                    $available_4wheeler = $area['total_4_wheeler_slots'] - $area['occupied_4_wheeler_slots'];
+                                    $available_commercial = $area['total_commercial_slots'] - $area['occupied_commercial_slots'];
+                                    ?>
                                     <option value="<?php echo $area['area_id']; ?>" 
-                                            data-2wheeler="<?php echo $area['total_2_wheeler_slots'] - $area['occupied_2_wheeler_slots']; ?>"
-                                            data-4wheeler="<?php echo $area['total_4_wheeler_slots'] - $area['occupied_4_wheeler_slots']; ?>"
-                                            data-commercial="<?php echo $area['total_commercial_slots'] - $area['occupied_commercial_slots']; ?>">
+                                            data-2wheeler="<?php echo $available_2wheeler; ?>"
+                                            data-4wheeler="<?php echo $available_4wheeler; ?>"
+                                            data-commercial="<?php echo $available_commercial; ?>">
                                         <?php echo $area['area_name']; ?> 
                                     </option>
                                 <?php endforeach; ?>
@@ -315,55 +350,78 @@ document.addEventListener('DOMContentLoaded', function() {
     const vehicleIdSelect = document.getElementById('vehicle_id');
     const vehicleTypeSelect = document.getElementById('vehicle_type');
     const areaSelect = document.getElementById('area_id');
-    const submitBtn = document.getElementById('submitBtn');
     const entryForm = document.getElementById('entryForm');
 
-    // Radio button event listeners
+    // Toggle sections based on radio selection
     existingVehicleRadio.addEventListener('change', function() {
+        existingVehicleSection.style.display = this.checked ? 'block' : 'none';
+        newVehicleSection.style.display = this.checked ? 'none' : 'block';
+        
         if (this.checked) {
-            existingVehicleSection.style.display = 'block';
-            newVehicleSection.style.display = 'none';
+            // Reset new vehicle form fields
+            if (vehicleTypeSelect) vehicleTypeSelect.value = '';
+            const newVehicleInputs = newVehicleSection.querySelectorAll('input[type="text"]');
+            newVehicleInputs.forEach(input => input.value = '');
         }
     });
 
     newVehicleRadio.addEventListener('change', function() {
-        if (this.checked) {
-            existingVehicleSection.style.display = 'none';
-            newVehicleSection.style.display = 'block';
+        newVehicleSection.style.display = this.checked ? 'block' : 'none';
+        existingVehicleSection.style.display = this.checked ? 'none' : 'block';
+        
+        if (this.checked && vehicleIdSelect) {
+            vehicleIdSelect.value = '';
         }
     });
 
     // Form validation
     entryForm.addEventListener('submit', function(e) {
-        let valid = true;
+        e.preventDefault(); // Prevent default submission
+        
+        let isValid = true;
+        let errorMessage = '';
 
+        // Validate vehicle selection
         if (existingVehicleRadio.checked) {
             if (!vehicleIdSelect || !vehicleIdSelect.value) {
-                alert('Please select a vehicle');
-                valid = false;
+                errorMessage = 'Please select a vehicle';
+                isValid = false;
             }
-        } else {
+        } else if (newVehicleRadio.checked) {
             if (!vehicleTypeSelect || !vehicleTypeSelect.value) {
-                alert('Please select a vehicle type');
-                valid = false;
+                errorMessage = 'Please select a vehicle type';
+                isValid = false;
             }
-
             const vehicleNumber = document.getElementById('vehicle_number');
             if (!vehicleNumber || !vehicleNumber.value.trim()) {
-                alert('Please enter a vehicle number');
-                valid = false;
+                errorMessage = 'Please enter a vehicle number';
+                isValid = false;
             }
         }
 
+        // Validate parking area
         if (!areaSelect || !areaSelect.value) {
-            alert('Please select a parking area');
-            valid = false;
+            errorMessage = 'Please select a parking area';
+            isValid = false;
         }
 
-        if (!valid) {
-            e.preventDefault();
+        if (!isValid) {
+            alert(errorMessage);
+            return;
         }
+
+        // If all validations pass, submit the form
+        this.submit();
     });
+
+    // Initialize the form state
+    if (existingVehicleRadio.checked) {
+        existingVehicleSection.style.display = 'block';
+        newVehicleSection.style.display = 'none';
+    } else {
+        existingVehicleSection.style.display = 'none';
+        newVehicleSection.style.display = 'block';
+    }
 });
 </script>
 

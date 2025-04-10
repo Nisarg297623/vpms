@@ -161,67 +161,23 @@ function initializeParkingCalculations() {
 function updatePricingInfo(vehicleType) {
     const pricingInfo = document.getElementById('pricing_info');
     
-    if (!pricingInfo) return;
-    
-    let rates = {
-        '2-wheeler': { hourly: '₹10', daily: '₹50', weekly: '₹300', monthly: '₹1000' },
-        '4-wheeler': { hourly: '₹30', daily: '₹150', weekly: '₹800', monthly: '₹2500' },
-        'commercial': { hourly: '₹50', daily: '₹250', weekly: '₹1500', monthly: '₹5000' }
-    };
-    
-    if (!vehicleType || !rates[vehicleType]) {
+    if (!pricingInfo || !parking_rates || !parking_rates[vehicleType]) {
         pricingInfo.innerHTML = '<p>Please select a vehicle type to see pricing</p>';
         return;
     }
     
-    const rate = rates[vehicleType];
+    const rate = parking_rates[vehicleType];
     
     pricingInfo.innerHTML = `
         <div class="pricing-table">
-            <p><strong>Hourly Rate:</strong> ${rate.hourly}</p>
-            <p><strong>Daily Rate:</strong> ${rate.daily}</p>
-            <p><strong>Weekly Rate:</strong> ${rate.weekly}</p>
-            <p><strong>Monthly Rate:</strong> ${rate.monthly}</p>
+            <p><strong>Hourly Rate:</strong> ₹${rate.hourly.toFixed(2)}</p>
+            <p><strong>Daily Rate:</strong> ₹${rate.daily.toFixed(2)}</p>
+            <p><strong>Weekly Rate:</strong> ₹${rate.weekly.toFixed(2)}</p>
+            <p><strong>Monthly Rate:</strong> ₹${rate.monthly.toFixed(2)}</p>
         </div>
     `;
 }
 
-// Calculate estimated cost based on duration and vehicle type
-function calculateEstimatedCost() {
-    const durationSelect = document.getElementById('expected_duration');
-    const vehicleTypeSelect = document.getElementById('vehicle_type');
-    const estimatedCostDisplay = document.getElementById('estimated_cost');
-    
-    if (!durationSelect || !vehicleTypeSelect || !estimatedCostDisplay) return;
-    
-    const duration = durationSelect.value;
-    const vehicleType = vehicleTypeSelect.value;
-    
-    if (!duration || !vehicleType) {
-        estimatedCostDisplay.textContent = '₹0.00';
-        return;
-    }
-    
-    let rates = {
-        '2-wheeler': { hourly: 10, daily: 50, weekly: 300, monthly: 1000 },
-        '4-wheeler': { hourly: 30, daily: 150, weekly: 800, monthly: 2500 },
-        'commercial': { hourly: 50, daily: 250, weekly: 1500, monthly: 5000 }
-    };
-    
-    let cost = 0;
-    const rate = rates[vehicleType];
-    
-    if (duration === '1hr') cost = rate.hourly;
-    else if (duration === '2hr') cost = rate.hourly * 2;
-    else if (duration === '4hr') cost = rate.hourly * 4;
-    else if (duration === '1day') cost = rate.daily;
-    else if (duration === '1week') cost = rate.weekly;
-    else if (duration === '1month') cost = rate.monthly;
-    
-    estimatedCostDisplay.textContent = '₹' + cost.toFixed(2);
-}
-
-// Calculate actual fee for exit
 function calculateActualFee() {
     const entryTimeInput = document.getElementById('entry_time');
     const vehicleTypeInput = document.getElementById('vehicle_type');
@@ -234,8 +190,8 @@ function calculateActualFee() {
     const currentTime = new Date();
     const vehicleType = vehicleTypeInput.value;
     
-    if (isNaN(entryTime.getTime())) {
-        actualFeeDisplay.textContent = 'Invalid entry time';
+    if (isNaN(entryTime.getTime()) || !parking_rates || !parking_rates[vehicleType]) {
+        actualFeeDisplay.textContent = 'Invalid entry time or vehicle type';
         return;
     }
     
@@ -243,13 +199,7 @@ function calculateActualFee() {
     const durationMs = currentTime - entryTime;
     const durationHours = durationMs / (1000 * 60 * 60);
     
-    let rates = {
-        '2-wheeler': { hourly: 10, daily: 50, weekly: 300, monthly: 1000 },
-        '4-wheeler': { hourly: 30, daily: 150, weekly: 800, monthly: 2500 },
-        'commercial': { hourly: 50, daily: 250, weekly: 1500, monthly: 5000 }
-    };
-    
-    const rate = rates[vehicleType];
+    const rate = parking_rates[vehicleType];
     let fee = 0;
     
     // Calculate fee based on duration
@@ -273,38 +223,89 @@ function calculateActualFee() {
         }
     } else {
         // More than 7 days
-        const weeks = Math.ceil(durationHours / 168); // 168 hours in a week
+        const weeks = Math.ceil(durationHours / 168);
         fee = weeks * rate.weekly;
         
         // Cap at monthly rate for 4 weeks
         if (weeks >= 4) {
-            const months = Math.ceil(durationHours / (168 * 4)); // Approximate month
+            const months = Math.ceil(durationHours / (168 * 4));
             fee = months * rate.monthly;
         }
     }
     
-    // Format duration for display
-    let durationText = '';
-    if (durationHours < 1) {
-        const minutes = Math.floor(durationHours * 60);
-        durationText = `${minutes} minute(s)`;
-    } else if (durationHours < 24) {
-        const hours = Math.floor(durationHours);
-        const minutes = Math.floor((durationHours - hours) * 60);
-        durationText = `${hours} hour(s) ${minutes} minute(s)`;
-    } else {
-        const days = Math.floor(durationHours / 24);
-        const remainingHours = Math.floor(durationHours % 24);
-        durationText = `${days} day(s) ${remainingHours} hour(s)`;
-    }
-    
-    durationDisplay.textContent = durationText;
+    // Update displays
+    durationDisplay.textContent = formatDuration(durationHours);
     actualFeeDisplay.textContent = '₹' + fee.toFixed(2);
     
-    // Also update the hidden input field for the form submission
+    // Update hidden input
     const feeInput = document.getElementById('calculated_fee');
     if (feeInput) {
         feeInput.value = fee.toFixed(2);
+    }
+}
+
+// Helper function to format duration
+function formatDuration(durationHours) {
+    if (durationHours < 1) {
+        const minutes = Math.floor(durationHours * 60);
+        return `${minutes} minute(s)`;
+    } else if (durationHours < 24) {
+        const hours = Math.floor(durationHours);
+        const minutes = Math.floor((durationHours - hours) * 60);
+        return `${hours} hour(s) ${minutes} minute(s)`;
+    } else {
+        const days = Math.floor(durationHours / 24);
+        const remainingHours = Math.floor(durationHours % 24);
+        return `${days} day(s) ${remainingHours} hour(s)`;
+    }
+}
+
+// Calculate estimated cost based on duration and vehicle type
+function calculateEstimatedCost() {
+    const durationSelect = document.getElementById('expected_duration');
+    const vehicleTypeSelect = document.getElementById('vehicle_type');
+    const estimatedCostDisplay = document.getElementById('estimated_cost');
+    
+    if (!durationSelect || !vehicleTypeSelect || !estimatedCostDisplay) return;
+    
+    const duration = durationSelect.value;
+    const vehicleType = vehicleTypeSelect.value;
+    
+    if (!duration || !vehicleType || !parking_rates || !parking_rates[vehicleType]) {
+        estimatedCostDisplay.textContent = '₹0.00';
+        return;
+    }
+    
+    const rate = parking_rates[vehicleType];
+    let cost = 0;
+    
+    switch(duration) {
+        case '1hr':
+            cost = parseFloat(rate.hourly);
+            break;
+        case '2hr':
+            cost = parseFloat(rate.hourly) * 2;
+            break;
+        case '4hr':
+            cost = parseFloat(rate.hourly) * 4;
+            break;
+        case '1day':
+            cost = parseFloat(rate.daily);
+            break;
+        case '1week':
+            cost = parseFloat(rate.weekly);
+            break;
+        case '1month':
+            cost = parseFloat(rate.monthly);
+            break;
+    }
+    
+    estimatedCostDisplay.textContent = '₹' + cost.toFixed(2);
+    
+    // Update hidden input for form submission
+    const feeInput = document.getElementById('calculated_fee');
+    if (feeInput) {
+        feeInput.value = cost.toFixed(2);
     }
 }
 
