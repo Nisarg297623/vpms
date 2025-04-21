@@ -97,7 +97,7 @@ VALUES
 ('A Block', 100, 50, 20),
 ('B Block', 80, 40, 15),
 ('C Block', 120, 60, 25);
-
+   
 
 CREATE TABLE IF NOT EXISTS contact_messages (
     message_id INT AUTO_INCREMENT PRIMARY KEY,

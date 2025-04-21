@@ -34,11 +34,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['transaction_id'])) {
         // Start transaction
         $conn->begin_transaction();
 
-        // Get transaction details
-        $query = "SELECT pt.*, v.vehicle_type, pa.area_id 
+        // Get transaction and vehicle details with rates
+        $query = "SELECT pt.*, v.vehicle_type, pa.area_id, pr.hourly_rate, pr.daily_rate, pr.weekly_rate, pr.monthly_rate
                  FROM parking_transactions pt
                  JOIN vehicles v ON pt.vehicle_id = v.vehicle_id
                  JOIN parking_areas pa ON pt.area_id = pa.area_id
+                 JOIN parking_rates pr ON v.vehicle_type = pr.vehicle_type
                  WHERE pt.transaction_id = ? AND pt.status = 'in'";
 
         $stmt = $conn->prepare($query);
@@ -51,32 +52,56 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['transaction_id'])) {
             throw new Exception("Invalid transaction or vehicle already exited.");
         }
 
-        // Update transaction status
-        $update_query = "UPDATE parking_transactions SET 
-                        exit_time = NOW(), 
-                        status = 'completed', 
-                        bill_amount = ?
-                        WHERE transaction_id = ?";
+        // Calculate duration and fee
+        $entry_time = new DateTime($transaction['entry_time']);
+        $exit_time = new DateTime(); // Current time
+        $duration = $entry_time->diff($exit_time);
+        $hours = ($duration->days * 24) + $duration->h;
+        
+        // Calculate fee based on duration
+        $fee = 0;
+        if ($hours <= 24) {
+            // Hourly rate (minimum 1 hour)
+            $fee = max(1, ceil($hours)) * $transaction['hourly_rate'];
+            // Cap at daily rate
+            $fee = min($fee, $transaction['daily_rate']);
+        } else if ($hours <= 168) { // 7 days
+            // Daily rate
+            $days = ceil($hours / 24);
+            $fee = $days * $transaction['daily_rate'];
+            // Cap at weekly rate
+            $fee = min($fee, $transaction['weekly_rate']);
+        } else {
+            // Weekly rate
+            $weeks = ceil($hours / 168);
+            $fee = $weeks * $transaction['weekly_rate'];
+            // Cap at monthly rate if applicable
+            if ($weeks >= 4) {
+                $months = ceil($hours / (168 * 4));
+                $fee = $months * $transaction['monthly_rate'];
+            }
+        }
 
+        // Update transaction with exit time and calculated fee
+        $update_query = "UPDATE parking_transactions SET 
+                        exit_time = NOW(),
+                        status = 'out',
+                        bill_amount = ?,
+                        bill_status = 'pending'
+                        WHERE transaction_id = ?";
         $stmt = $conn->prepare($update_query);
-        $stmt->bind_param("ds", $calculated_fee, $transaction_id);
+        $stmt->bind_param("ds", $fee, $transaction_id);
         if (!$stmt->execute()) {
-            throw new Exception("Error updating transaction.");
+            throw new Exception("Failed to update transaction.");
         }
 
         // Update parking area occupancy
-        $column_occupied = "";
-        switch ($transaction['vehicle_type']) {
-            case '2-wheeler':
-                $column_occupied = "occupied_2_wheeler_slots";
-                break;
-            case '4-wheeler':
-                $column_occupied = "occupied_4_wheeler_slots";
-                break;
-            case 'commercial':
-                $column_occupied = "occupied_commercial_slots";
-                break;
-        }
+        $column_occupied = match ($transaction['vehicle_type']) {
+            '2-wheeler' => 'occupied_2_wheeler_slots',
+            '4-wheeler' => 'occupied_4_wheeler_slots',
+            'commercial' => 'occupied_commercial_slots',
+            default => throw new Exception("Invalid vehicle type")
+        };
 
         $update_query = "UPDATE parking_areas SET $column_occupied = $column_occupied - 1 WHERE area_id = ?";
         $stmt = $conn->prepare($update_query);
